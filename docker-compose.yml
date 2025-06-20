@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # --- JupyterHub Service ---
+  jupyterhub:
+    image: juphub/hub:latest
+    command: ["jupyterhub", "-f", "/etc/jupyterhub/jupyterhub_config.py"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - jupyterhub-data:/srv/jupyterhub
+      - jupyter-notebooks:/notebooks
+    networks:
+      - core_network  # Reference the external network
+    configs:
+      - source: jupyter_jupyterhub_config
+        target: /etc/jupyterhub/jupyterhub_config.py
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - "traefik.enable=true"
+
+        # Router for /hub paths - forward as is (no rewrite)
+        - "traefik.http.routers.jupyterhub-hub.rule=Host(`${DOMAIN}`) && PathPrefix(`/hub`)"
+        - "traefik.http.routers.jupyterhub-hub.priority=200"
+        - "traefik.http.routers.jupyterhub-hub.entrypoints=websecure"
+        - "traefik.http.routers.jupyterhub-hub.service=jupyterhub"
+        - "traefik.http.routers.jupyterhub-hub.tls.certresolver=letsencrypt"
+
+        # Router for /user paths - forward as is (no rewrite)
+        - "traefik.http.routers.jupyterhub-user.rule=Host(`${DOMAIN}`) && PathPrefix(`/user`)"
+        - "traefik.http.routers.jupyterhub-user.priority=190"
+        - "traefik.http.routers.jupyterhub-user.entrypoints=websecure"
+        - "traefik.http.routers.jupyterhub-user.service=jupyterhub"
+        - "traefik.http.routers.jupyterhub-user.tls.certresolver=letsencrypt"
+
+        # Router for root path `/` - rewrite to `/hub`
+        - "traefik.http.routers.jupyterhub-root.rule=Host(`${DOMAIN}`) && Path(`/`)"
+        - "traefik.http.routers.jupyterhub-root.priority=100"
+        - "traefik.http.routers.jupyterhub-root.entrypoints=websecure"
+        - "traefik.http.routers.jupyterhub-root.service=jupyterhub"
+        - "traefik.http.routers.jupyterhub-root.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.jupyterhub-root.middlewares=jupyterhub-rewrite"
+
+        # Middleware: rewrite the exact path `/` to `/hub` using a regular expression
+        - "traefik.http.middlewares.jupyterhub-rewrite.replacepathregex.regex=^/$$"
+        - "traefik.http.middlewares.jupyterhub-rewrite.replacepathregex.replacement=/hub"
+
+        # JupyterHub service port
+        - "traefik.http.services.jupyterhub.loadbalancer.server.port=${JUPYTERHUB_PORT}"
+
+# --- Network, Volume, and Config Definitions ---
+networks:
+  core_network:
+    external: true  # This tells Docker the network already exists
+
+volumes:
+  jupyterhub-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOST_DATA_PATH}/data/jupyter/hub-data
+  jupyter-notebooks:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOST_DATA_PATH}/data/jupyter/notebooks
+
+configs:
+  jupyter_jupyterhub_config: 
+    external: true
