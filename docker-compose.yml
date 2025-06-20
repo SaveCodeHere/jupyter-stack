@@ -49,7 +49,7 @@ services:
         - "traefik.http.middlewares.jupyterhub-rewrite.replacepathregex.replacement=/hub"
 
         # JupyterHub service port
-        - "traefik.http.services.jupyterhub.loadbalancer.server.port=${JUPYTERHUB_PORT}"
+        - "traefik.http.services.jupyterhub.loadbalancer.server.port=8000"
 
 # --- Network, Volume, and Config Definitions ---
 networks:
@@ -62,13 +62,13 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: ${HOST_DATA_PATH}/data/jupyter/hub-data
+      device: ${HOST_DATA_PATH}/jupyter/hub-data
   jupyter-notebooks:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ${HOST_DATA_PATH}/data/jupyter/notebooks
+      device: ${HOST_DATA_PATH}/jupyter/notebooks
 
 configs:
   jupyter_jupyterhub_config: 
